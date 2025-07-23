@@ -139,8 +139,10 @@ export default function Home() {
     // Paragraphs
     p: ({ children, ...props }) => {
       // Check if this paragraph is the first child of a list item
-      const isFirstInListItem = props.node?.parent?.type === 'listItem' && 
-                                props.node?.parent?.children[0] === props.node;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const node = props.node as any;
+      const isFirstInListItem = node?.parent?.type === 'listItem' && 
+                                node?.parent?.children?.[0] === node;
       
       if (isFirstInListItem) {
         return <span className="leading-relaxed">{children}</span>;
