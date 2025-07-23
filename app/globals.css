@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom styles for better list formatting */
+.prose ol > li > p:first-child {
+  display: inline;
+  margin: 0;
+}
+
+.prose ol > li > strong:first-child {
+  display: inline;
+}
+
+.prose ol > li {
+  margin-bottom: 0.5rem;
+}
+
+.prose ol > li > p:first-child + p {
+  margin-top: 0.25rem;
+}
+
+/* Improved numbered list with subtitles */
+.prose .numbered-list-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.prose .numbered-list-item .number {
+  min-width: 1.5rem;
+  margin-right: 0.5rem;
+  font-weight: 600;
+}
+
+.prose .numbered-list-item .content {
+  flex: 1;
+}
+
+.prose .numbered-list-item .subtitle {
+  font-weight: 600;
+  display: inline;
+  margin-right: 0.5rem;
+}
