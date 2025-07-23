@@ -16,6 +16,25 @@ const nextConfig = {
     // Don't fail build on ESLint errors during deployment
     ignoreDuringBuilds: false,
   },
+  
+  // Add explicit routing configuration for Vercel
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/',
+      },
+    ];
+  },
+  
+  // Ensure proper trailing slash handling
+  trailingSlash: false,
+  
+  // Add base path if needed
+  basePath: '',
+  
+  // Ensure proper asset prefix
+  assetPrefix: '',
 };
 
 module.exports = nextConfig; 
