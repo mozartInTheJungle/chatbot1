@@ -20,6 +20,12 @@ const nextConfig = {
   // Add explicit routing configuration for Vercel
   async rewrites() {
     return [
+      // Do NOT rewrite API routes
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
+      },
+      // Rewrite all other routes to the home page
       {
         source: '/:path*',
         destination: '/',
