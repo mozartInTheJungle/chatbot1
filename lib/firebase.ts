@@ -2,15 +2,20 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Your Firebase configuration
+// Firebase configuration using environment variables for security
 const firebaseConfig = {
-  apiKey: "AIzaSyC4LcmJHJK7fprqYWgACNuXGFaSTG4Uyiw",
-  authDomain: "ai-chatbot-app-f0c14.firebaseapp.com",
-  projectId: "ai-chatbot-app-f0c14",
-  storageBucket: "ai-chatbot-app-f0c14.firebasestorage.app",
-  messagingSenderId: "886517383663",
-  appId: "1:886517383663:web:f46458ec23202a237db61a"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
+
+// Validate that all required environment variables are present
+if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
+  throw new Error('Missing required Firebase environment variables. Please check your .env file and ensure all NEXT_PUBLIC_FIREBASE_* variables are set.');
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

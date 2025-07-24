@@ -5,6 +5,7 @@ import {
   where, 
   orderBy, 
   getDocs, 
+  getDoc,
   doc, 
   updateDoc, 
   deleteDoc,
@@ -86,18 +87,16 @@ export const getUserChatSessions = async (userId: string) => {
   }
 };
 
-// Get a specific chat session
+// Get a specific chat session - FIXED: Now uses proper document fetching
 export const getChatSession = async (sessionId: string) => {
   try {
-    const docSnap = await getDocs(collection(db, 'chatSessions'));
+    const docRef = doc(db, 'chatSessions', sessionId);
+    const docSnap = await getDoc(docRef);
     
-    // Find the document with matching sessionId
-    const targetDoc = docSnap.docs.find(doc => doc.id === sessionId);
-    
-    if (targetDoc) {
-      const data = targetDoc.data();
+    if (docSnap.exists()) {
+      const data = docSnap.data();
       return {
-        id: targetDoc.id,
+        id: docSnap.id,
         userId: data.userId,
         title: data.title,
         messages: data.messages || [],
