@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DeepSeek AI Assistant",
-  description: "Advanced AI chatbot powered by DeepSeek API with rich markdown support",
+  title: "AI Assistant - Chat with Advanced AI",
+  description: "Intelligent AI chatbot with user authentication and chat history",
 };
 
 export default function RootLayout({

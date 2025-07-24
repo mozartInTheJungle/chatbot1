@@ -4,6 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Components } from 'react-markdown';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import LoginForm from '@/components/LoginForm';
+import ChatHistory from '@/components/ChatHistory';
+import { createChatSession, addMessageToSession, ChatSession, ChatMessage } from '@/lib/chatService';
 
 // Chat message interface
 interface Message {
@@ -19,7 +23,8 @@ interface APIMessage {
   content: string;
 }
 
-export default function Home() {
+function ChatApp() {
+  const { user, signOutUser, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -31,6 +36,8 @@ export default function Home() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
+  const [showSidebar, setShowSidebar] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -52,9 +59,51 @@ export default function Home() {
       }));
   };
 
+  // Create a new chat session
+  const handleNewChat = async () => {
+    if (!user) return;
+
+    try {
+      const newSession = await createChatSession(user.uid);
+      setCurrentSession(newSession as ChatSession);
+      setMessages([
+        {
+          id: '1',
+          text: "Hello! I'm your AI assistant. How can I help you today?",
+          isUser: false,
+          timestamp: new Date()
+        }
+      ]);
+      setError(null);
+    } catch (error) {
+      console.error('Error creating new chat session:', error);
+      setError('Failed to create new chat session');
+    }
+  };
+
+  // Load a chat session
+  const handleSessionSelect = (session: ChatSession) => {
+    setCurrentSession(session);
+    setMessages([
+      {
+        id: '1',
+        text: "Hello! I'm your AI assistant. How can I help you today?",
+        isUser: false,
+        timestamp: new Date()
+      },
+      ...session.messages.map((msg, index) => ({
+        id: (index + 2).toString(),
+        text: msg.content,
+        isUser: msg.role === 'user',
+        timestamp: msg.timestamp
+      }))
+    ]);
+    setError(null);
+  };
+
   // Handle sending messages
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isTyping) return;
+    if (!inputValue.trim() || isTyping || !user) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -102,9 +151,33 @@ export default function Home() {
       };
 
       setMessages(prev => [...prev, aiResponse]);
-    } catch (err) {
-      console.error('Chat error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+
+      // Save messages to database if we have a session
+      if (currentSession?.id) {
+        try {
+          // Save user message
+          await addMessageToSession(currentSession.id, {
+            role: 'user',
+            content: userMessage.text,
+            timestamp: userMessage.timestamp
+          });
+
+          // Save AI response
+          await addMessageToSession(currentSession.id, {
+            role: 'assistant',
+            content: aiResponse.text,
+            timestamp: aiResponse.timestamp
+          });
+        } catch (error) {
+          console.error('Error saving messages to database:', error);
+        }
+      }
+    } catch (error: any) {
+      console.error('Chat API error:', error);
+      setError(error.message || 'Failed to get response from AI');
+      
+      // Remove the user message if there was an error
+      setMessages(prev => prev.filter(msg => msg.id !== userMessage.id));
     } finally {
       setIsTyping(false);
     }
@@ -129,99 +202,89 @@ export default function Home() {
     setError(null);
   };
 
-  // Custom markdown components for better styling
-  const markdownComponents: Components = {
-    // Headers
-    h1: ({ children }) => <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-3 mt-4">{children}</h1>,
-    h2: ({ children }) => <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 mt-3">{children}</h2>,
-    h3: ({ children }) => <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 mt-3">{children}</h3>,
-    
-    // Paragraphs
-    p: ({ children, ...props }) => {
-      // Check if this paragraph is the first child of a list item
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const node = props.node as any;
-      const isFirstInListItem = node?.parent?.type === 'listItem' && 
-                                node?.parent?.children?.[0] === node;
-      
-      if (isFirstInListItem) {
-        return <span className="leading-relaxed">{children}</span>;
-      }
-      
-      return <p className="mb-3 leading-relaxed">{children}</p>;
-    },
-    
-    // Lists
-    ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-2 ml-4">{children}</ul>,
-    ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 ml-4">{children}</ol>,
-    li: ({ children }) => (
-      <li className="leading-relaxed mb-2">
-        {children}
-      </li>
-    ),
-    
-    // Code blocks
-    code: ({ children, className }) => {
-      const isInline = !className;
-      if (isInline) {
-        return <code className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>;
-      }
-      return (
-        <code className="block bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre">
+  // Markdown components configuration
+  const components: Components = {
+    code({ node, inline, className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      return !inline && match ? (
+        <div className="relative">
+          <div className="absolute top-0 right-0 mt-2 mr-2">
+            <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
+              {match[1]}
+            </span>
+          </div>
+          <pre className={`${className} bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto`} {...props}>
+            <code>{children}</code>
+          </pre>
+        </div>
+      ) : (
+        <code className={`${className} bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-sm`} {...props}>
           {children}
         </code>
       );
     },
-    pre: ({ children }) => <pre className="mb-3">{children}</pre>,
-    
-    // Blockquotes
-    blockquote: ({ children }) => (
-      <blockquote className="border-l-4 border-blue-500 pl-4 py-2 my-3 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg">
-        {children}
-      </blockquote>
-    ),
-    
-    // Links
-    a: ({ href, children }) => (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-        {children}
-      </a>
-    ),
-    
-    // Strong and emphasis
-    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-    em: ({ children }) => <em className="italic">{children}</em>,
-    
-    // Tables
-    table: ({ children }) => (
-      <div className="overflow-x-auto mb-3">
-        <table className="min-w-full border border-gray-300 dark:border-gray-600 rounded-lg">
+    table({ children }) {
+      return (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            {children}
+          </table>
+        </div>
+      );
+    },
+    th({ children }) {
+      return (
+        <th className="px-6 py-3 bg-gray-50 dark:bg-gray-800 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           {children}
-        </table>
-      </div>
-    ),
-    thead: ({ children }) => <thead className="bg-gray-50 dark:bg-gray-700">{children}</thead>,
-    tbody: ({ children }) => <tbody>{children}</tbody>,
-    tr: ({ children }) => <tr className="border-b border-gray-300 dark:border-gray-600">{children}</tr>,
-    th: ({ children }) => <th className="px-4 py-2 text-left font-semibold">{children}</th>,
-    td: ({ children }) => <td className="px-4 py-2">{children}</td>,
-    
-    // Horizontal rule
-    hr: () => <hr className="my-4 border-gray-300 dark:border-gray-600" />,
+        </th>
+      );
+    },
+    td({ children }) {
+      return (
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 border-t border-gray-200 dark:border-gray-700">
+          {children}
+        </td>
+      );
+    },
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginForm onToggleMode={() => {}} isLogin={true} />;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-6 py-4">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Sidebar */}
+      {showSidebar && (
+        <ChatHistory
+          currentSessionId={currentSession?.id}
+          onSessionSelect={handleSessionSelect}
+          onNewChat={handleNewChat}
+        />
+      )}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
-              </div>
+              </button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900 dark:text-white">AI Assistant</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Powered by Advanced AI</p>
@@ -230,182 +293,139 @@ export default function Home() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={clearChat}
-                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               >
-                Clear Chat
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
               </button>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-500 dark:text-gray-400">Online</span>
-              </div>
+              <button
+                onClick={signOutUser}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Error Banner */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 mx-6 mt-4 rounded-lg">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Main Chat Area */}
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-          {/* Messages Container */}
-          <div className="h-[600px] overflow-y-auto p-6 space-y-4">
-            {messages.map((message) => (
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+            >
               <div
-                key={message.id}
-                className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+                className={`max-w-3xl rounded-2xl px-6 py-4 ${
+                  message.isUser
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
+                }`}
               >
-                <div className={`max-w-[85%] ${message.isUser ? 'order-2' : 'order-1'}`}>
-                  <div className={`flex items-start space-x-3 ${message.isUser ? 'flex-row-reverse space-x-reverse' : ''}`}>
-                    {/* Avatar */}
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      message.isUser 
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-600' 
-                        : 'bg-gradient-to-r from-gray-500 to-gray-600'
-                    }`}>
-                      {message.isUser ? (
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                        </svg>
-                      )}
+                <div className="flex items-start space-x-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    message.isUser ? 'bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}>
+                    {message.isUser ? (
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`prose ${message.isUser ? 'prose-invert' : 'dark:prose-invert'} max-w-none`}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={components}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
                     </div>
-                    
-                    {/* Message Bubble */}
-                    <div className={`px-4 py-3 rounded-2xl ${
-                      message.isUser 
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' 
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                    <p className={`text-xs mt-2 ${
+                      message.isUser ? 'text-indigo-200' : 'text-gray-500 dark:text-gray-400'
                     }`}>
-                      {message.isUser ? (
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
-                      ) : (
-                        <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={markdownComponents}
-                          >
-                            {message.text}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                      <p className={`text-xs mt-2 ${
-                        message.isUser ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+                      {message.timestamp.toLocaleTimeString()}
+                    </p>
                   </div>
                 </div>
               </div>
-            ))}
-
-            {/* Typing Indicator */}
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-gray-500 to-gray-600 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-2xl px-6 py-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
                   </div>
-                  <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 rounded-2xl">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
                 </div>
               </div>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          )}
+          
+          {error && (
+            <div className="flex justify-center">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 max-w-2xl">
+                <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
 
-          {/* Input Area */}
-          <div className="border-t border-gray-200/50 dark:border-gray-700/50 p-6">
-            <div className="flex items-end space-x-4">
-              <div className="flex-1 relative">
+        {/* Input Area */}
+        <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex space-x-4">
+              <div className="flex-1">
                 <textarea
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Ask me anything..."
-                  className="w-full px-4 py-3 pr-12 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                  placeholder="Type your message here..."
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white resize-none"
                   rows={1}
-                  style={{ minHeight: '48px', maxHeight: '120px' }}
-                  disabled={isTyping}
+                  style={{ minHeight: '48px', maxHeight: '200px' }}
                 />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim() || isTyping}
-                  className="absolute right-2 bottom-2 p-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
               </div>
-            </div>
-            
-            {/* Quick Actions */}
-            <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-                <span>Press Enter to send</span>
-                <span>•</span>
-                <span>Shift + Enter for new line</span>
-              </div>
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isTyping}
+                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors duration-200 flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                <span>Send</span>
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Features Section */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">AI Powered</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced AI responses powered by cutting-edge language models</p>
-          </div>
-
-          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Rich Formatting</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">Beautiful markdown rendering with code highlighting and structured content</p>
-          </div>
-
-          <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
-            <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-xl flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Multi-Round Chat</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">Maintains conversation context for intelligent, contextual responses</p>
-          </div>
-        </div>
-      </main>
+      </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthProvider>
+      <ChatApp />
+    </AuthProvider>
   );
 }
