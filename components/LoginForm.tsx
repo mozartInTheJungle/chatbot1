@@ -26,8 +26,9 @@ export default function LoginForm({ onToggleMode, isLogin }: LoginFormProps) {
       } else {
         await signUp(email, password);
       }
-    } catch (error: any) {
-      setError(error.message || 'An error occurred');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -39,8 +40,9 @@ export default function LoginForm({ onToggleMode, isLogin }: LoginFormProps) {
 
     try {
       await signInWithGoogle();
-    } catch (error: any) {
-      setError(error.message || 'An error occurred');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

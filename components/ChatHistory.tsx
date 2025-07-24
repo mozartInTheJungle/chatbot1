@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserChatSessions, deleteChatSession, updateChatSessionTitle, ChatSession } from '@/lib/chatService';
 
@@ -13,17 +13,11 @@ interface ChatHistoryProps {
 export default function ChatHistory({ currentSessionId, onSessionSelect, onNewChat }: ChatHistoryProps) {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
-  useEffect(() => {
-    if (user) {
-      loadSessions();
-    }
-  }, [user]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -35,7 +29,13 @@ export default function ChatHistory({ currentSessionId, onSessionSelect, onNewCh
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadSessions();
+    }
+  }, [user, loadSessions]);
 
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -64,8 +64,10 @@ export default function ChatHistory({ currentSessionId, onSessionSelect, onNewCh
   };
 
   const startEditing = (session: ChatSession) => {
-    setEditingSessionId(session.id);
-    setEditingTitle(session.title);
+    if (session.id) {
+      setEditingSessionId(session.id);
+      setEditingTitle(session.title);
+    }
   };
 
   const formatDate = (date: Date) => {

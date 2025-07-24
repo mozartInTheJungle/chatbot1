@@ -29,8 +29,9 @@ export interface ChatSession {
 }
 
 // Create a new chat session
-export const createChatSession = async (userId: string, title: string = 'New Chat') => {
+export const createChatSession = async (userId: string, title: string = 'New Chat'): Promise<ChatSession> => {
   try {
+    const now = new Date();
     const sessionData = {
       userId,
       title,
@@ -40,7 +41,14 @@ export const createChatSession = async (userId: string, title: string = 'New Cha
     };
 
     const docRef = await addDoc(collection(db, 'chatSessions'), sessionData);
-    return { id: docRef.id, ...sessionData };
+    return { 
+      id: docRef.id, 
+      userId,
+      title,
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
   } catch (error) {
     console.error('Error creating chat session:', error);
     throw error;
@@ -81,13 +89,15 @@ export const getUserChatSessions = async (userId: string) => {
 // Get a specific chat session
 export const getChatSession = async (sessionId: string) => {
   try {
-    const docRef = doc(db, 'chatSessions', sessionId);
     const docSnap = await getDocs(collection(db, 'chatSessions'));
     
-    if (docSnap.exists()) {
-      const data = docSnap.data();
+    // Find the document with matching sessionId
+    const targetDoc = docSnap.docs.find(doc => doc.id === sessionId);
+    
+    if (targetDoc) {
+      const data = targetDoc.data();
       return {
-        id: docSnap.id,
+        id: targetDoc.id,
         userId: data.userId,
         title: data.title,
         messages: data.messages || [],

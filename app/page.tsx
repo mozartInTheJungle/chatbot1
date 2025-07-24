@@ -7,7 +7,7 @@ import { Components } from 'react-markdown';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import LoginForm from '@/components/LoginForm';
 import ChatHistory from '@/components/ChatHistory';
-import { createChatSession, addMessageToSession, ChatSession, ChatMessage } from '@/lib/chatService';
+import { createChatSession, addMessageToSession, ChatSession } from '@/lib/chatService';
 
 // Chat message interface
 interface Message {
@@ -65,7 +65,7 @@ function ChatApp() {
 
     try {
       const newSession = await createChatSession(user.uid);
-      setCurrentSession(newSession as ChatSession);
+      setCurrentSession(newSession);
       setMessages([
         {
           id: '1',
@@ -101,13 +101,12 @@ function ChatApp() {
     setError(null);
   };
 
-  // Handle sending messages
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || isTyping || !user) return;
+    if (!inputValue.trim() || isTyping) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputValue,
+      text: inputValue.trim(),
       isUser: true,
       timestamp: new Date()
     };
@@ -172,9 +171,10 @@ function ChatApp() {
           console.error('Error saving messages to database:', error);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Chat API error:', error);
-      setError(error.message || 'Failed to get response from AI');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get response from AI';
+      setError(errorMessage);
       
       // Remove the user message if there was an error
       setMessages(prev => prev.filter(msg => msg.id !== userMessage.id));
@@ -204,21 +204,23 @@ function ChatApp() {
 
   // Markdown components configuration
   const components: Components = {
-    code({ node, inline, className, children, ...props }) {
+    code(props) {
+      const { className, children } = props;
       const match = /language-(\w+)/.exec(className || '');
-      return !inline && match ? (
+      const isInline = !match;
+      return !isInline ? (
         <div className="relative">
           <div className="absolute top-0 right-0 mt-2 mr-2">
             <span className="text-xs text-gray-500 bg-gray-800 px-2 py-1 rounded">
               {match[1]}
             </span>
           </div>
-          <pre className={`${className} bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto`} {...props}>
+          <pre className={`${className} bg-gray-800 text-gray-100 p-4 rounded-lg overflow-x-auto`}>
             <code>{children}</code>
           </pre>
         </div>
       ) : (
-        <code className={`${className} bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-sm`} {...props}>
+        <code className={`${className} bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-sm`}>
           {children}
         </code>
       );
