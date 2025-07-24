@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // DeepSeek API configuration
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-e56d1b52dfe64e78802216e547f36e04';
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
 
 // Message interface
@@ -12,6 +12,14 @@ interface Message {
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate API key is configured
+    if (!DEEPSEEK_API_KEY) {
+      return NextResponse.json(
+        { error: 'DeepSeek API key is not configured' },
+        { status: 500 }
+      );
+    }
+
     const { messages } = await request.json();
 
     // Validate input

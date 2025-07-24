@@ -23,7 +23,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm your AI assistant powered by DeepSeek. How can I help you today?",
+      text: "Hello! I'm your AI assistant. How can I help you today?",
       isUser: false,
       timestamp: new Date()
     }
@@ -121,7 +121,7 @@ export default function Home() {
     setMessages([
       {
         id: '1',
-        text: "Hello! I'm your AI assistant powered by DeepSeek. How can I help you today?",
+        text: "Hello! I'm your AI assistant. How can I help you today?",
         isUser: false,
         timestamp: new Date()
       }
@@ -223,8 +223,8 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">DeepSeek AI Assistant</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Powered by DeepSeek API</p>
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">AI Assistant</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Powered by Advanced AI</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -381,8 +381,8 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">DeepSeek Powered</h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced AI responses powered by DeepSeek&apos;s cutting-edge language model</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">AI Powered</h3>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">Advanced AI responses powered by cutting-edge language models</p>
           </div>
 
           <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
