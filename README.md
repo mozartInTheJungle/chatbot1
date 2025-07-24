@@ -11,12 +11,16 @@ A modern, responsive AI chatbot built with Next.js 15 and powered by the DeepSee
 - 🌙 **Dark Mode Support** - Automatic dark/light theme switching
 - 📱 **Responsive Design** - Works perfectly on desktop and mobile
 - ⚡ **Fast Performance** - Optimized Next.js 15 with modern React features
+- 🔐 **User Authentication** - Firebase authentication with email/password and Google OAuth
+- 💾 **Chat History** - Persistent chat sessions with Firestore database
 
 ## Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
 - **UI**: Tailwind CSS 3.4.17
 - **AI Provider**: DeepSeek API
+- **Authentication**: Firebase Auth
+- **Database**: Firebase Firestore
 - **Markdown**: react-markdown with remark-gfm
 - **Icons**: Heroicons (SVG)
 - **Fonts**: Geist Sans & Geist Mono
@@ -27,6 +31,7 @@ A modern, responsive AI chatbot built with Next.js 15 and powered by the DeepSee
 
 - Node.js 18+ 
 - DeepSeek API key
+- Firebase project
 
 ### Installation
 
@@ -43,8 +48,16 @@ npm install
 
 3. Set up environment variables:
 ```bash
-# Create .env.local file with your DeepSeek API key
+# Create .env.local file with your API keys
 DEEPSEEK_API_KEY=your_api_key_here
+
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
 ```
 
 4. Run the development server:
@@ -76,6 +89,14 @@ chatbot/
 │   ├── layout.tsx             # Root layout with fonts
 │   ├── page.tsx               # Main chat interface
 │   └── globals.css            # Global styles
+├── components/
+│   ├── LoginForm.tsx          # Authentication forms
+│   └── ChatHistory.tsx        # Chat history sidebar
+├── contexts/
+│   └── AuthContext.tsx        # Firebase authentication context
+├── lib/
+│   ├── firebase.ts            # Firebase configuration
+│   └── chatService.ts         # Firestore operations
 ├── public/                    # Static assets
 ├── tailwind.config.js         # Tailwind configuration
 └── package.json              # Dependencies
@@ -83,12 +104,24 @@ chatbot/
 
 ## Features in Detail
 
+### Authentication
+- Email/password sign up and sign in
+- Google OAuth integration
+- Protected routes and user sessions
+- Secure token management
+
 ### Chat Interface
 - Clean, modern chat bubbles with proper alignment
 - User and AI avatars with distinct styling
 - Typing indicators with animated dots
 - Timestamp display for each message
 - Auto-scroll to latest messages
+
+### Chat History
+- Persistent chat sessions stored in Firestore
+- Sidebar with chat history navigation
+- Edit and delete chat sessions
+- Real-time updates
 
 ### Markdown Rendering
 - **Headers** (H1, H2, H3) with proper styling
@@ -131,6 +164,8 @@ npm install
 
 3. **Build errors**: Ensure all TypeScript types are correct
 
+4. **Firebase errors**: Verify Firebase configuration and security rules
+
 ### Performance Optimization
 
 - Use `npm run build` to check bundle sizes
@@ -143,15 +178,22 @@ npm install
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
-## License
+## Deployment
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Vercel (Recommended)
+1. Connect your GitHub repository to Vercel
+2. Add environment variables in Vercel dashboard
+3. Deploy automatically on push to main branch
 
-## Acknowledgments
+### Firebase Hosting
+1. Install Firebase CLI: `npm install -g firebase-tools`
+2. Initialize Firebase: `firebase init`
+3. Build and deploy: `npm run build && firebase deploy`
 
-- [DeepSeek](https://deepseek.com/) for the AI API
-- [Next.js](https://nextjs.org/) for the framework
-- [Tailwind CSS](https://tailwindcss.com/) for styling
-- [Heroicons](https://heroicons.com/) for icons
+## Security
+
+- All API keys are stored in environment variables
+- Firebase security rules protect user data
+- Authentication tokens are managed securely
+- No sensitive data is exposed in client-side code
